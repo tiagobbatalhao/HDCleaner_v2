@@ -90,19 +90,18 @@ def main_pandas(path):
     df = pandas.DataFrame()
 
     files = list_files(path, with_size=True)
-    common_dir, paths = remove_common_path([x[0] for x in files])
-    df['filepath'] = paths
+    df['filepath'] = [x[0] for x in files]
     df['size'] = [x[1] for x in files]
+    df = df.drop_duplicates('filepath')
     df['type'] = df['filepath'].apply(file_visibility)
     df['extension'] = df['filepath'].apply(lambda x: os.path.splitext(x)[1])
     levels = df['filepath'].apply(lambda x: file_levels(x, as_dict=False))
-    df = df.drop_duplicates('filepath')
     level_len = levels.apply(len)
     for i in range(max(level_len)):
         flter = level_len > i
         df.loc[flter, f'level_{i:02d}'] = levels.loc[flter].apply(lambda x: x[i])
 
-    return common_dir, df
+    return df
 
 def hash_MD5(path):
     """
@@ -120,7 +119,7 @@ def hash_MD5(path):
     logging.info(f'Finished hashing {path}')
     return hasher.hexdigest()
 
-def find_issues_pandas(common_path, dataframe):
+def find_issues_pandas(dataframe):
     """
     Return sets of files that may be the same
     """
@@ -137,7 +136,7 @@ def find_issues_pandas(common_path, dataframe):
     df = df[flter]
     df['hashMD5'] = \
         df['filepath'].apply(
-            lambda x: hash_MD5(os.path.join(common_path, x))
+            lambda x: hash_MD5(x)
         )
 
     unique = df\
