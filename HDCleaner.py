@@ -148,3 +148,54 @@ def find_issues_pandas(dataframe):
         .drop('hashMD5', axis=1)\
         .reset_index(drop=True)
     return unique
+
+def find_issues_master_client(
+        dataframe_master,
+        dataframe_client,
+        min_size=0,
+        only_visible=True,
+    ):
+    """
+    Delete files in client if they are present in master
+    """
+    # Check if there are common files in master and client
+    common_files = \
+        set(dataframe_master['filepath'].unique())\
+        .intersection(set(dataframe_client['filepath'].unique()))
+    if len(common_files):
+        raise Exception('Master and client must not contain the same files')
+
+    # Filter too-small files
+    df_master = dataframe_master[dataframe_master['size']>=min_size]
+    df_client = dataframe_client[dataframe_client['size']>=min_size]
+
+    # Filter only files that are Visible
+    if only_visible:
+        df_master = df_master[df_master['type']=='visible']
+        df_client = df_client[df_client['type']=='visible']
+
+    # Filter only files that have a size in common with the other
+    common_sizes = \
+        set(df_master['size'].unique())\
+        .intersection(set(df_client['size'].unique()))
+    df_master = df_master[df_master['size'].isin(common_sizes)]
+    df_client = df_client[df_client['size'].isin(common_sizes)]
+
+    # Hashing all the files
+    df_master['hashMD5'] = df_master['filepath'].apply(lambda x: hash_MD5(x))
+    df_client['hashMD5'] = df_client['filepath'].apply(lambda x: hash_MD5(x))
+
+    # Filter out files that could not be hashed
+    df_master = df_master[~df_master['hashMD5'].isnull()]
+    df_client = df_client[~df_client['hashMD5'].isnull()]
+
+    # Inner join for same_files
+    same_files = \
+        df_client\
+        .merge(
+            df_master[['size', 'hashMD5', 'filepath']],
+            how='inner',
+            on=['size', 'hashMD5'],
+            suffixes=['', '_master'],
+        )
+    return same_files
